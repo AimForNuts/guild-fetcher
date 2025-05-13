@@ -53,6 +53,19 @@ def process_guild_file(file_path):
                 
             return members_data
             
+        # Try new format (array of members with status)
+        elif isinstance(data, dict) and 'members' in data and isinstance(data['members'], list):
+            members_data = []
+            for member in data['members']:
+                status = 'OK' if member.get('status') == 'participant' else 'X'
+                members_data.append({
+                    'Name': member.get('name', ''),
+                    'Total Level': 'N/A',
+                    'Combat Level': 'N/A',
+                    'Status': status
+                })
+            return members_data
+            
         # Fall back to simplified format
         elif isinstance(data, dict) and 'participants' in data:
             # Simplified format
