@@ -1,0 +1,59 @@
+name: Build macOS and Windows Apps
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas openpyxl pyinstaller
+
+    - name: Build macOS App with PyInstaller
+      run: |
+        pyinstaller --onefile import_members.py
+
+    - name: Upload macOS App artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: import-members-app-mac
+        path: dist/import_members
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas openpyxl pyinstaller
+
+    - name: Build Windows EXE with PyInstaller
+      run: |
+        pyinstaller --onefile import_members.py
+
+    - name: Upload Windows EXE artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: import-members-app-win
+        path: dist/import_members.exe 
