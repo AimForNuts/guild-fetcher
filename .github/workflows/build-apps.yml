@@ -1,4 +1,4 @@
-name: Build macOS and Windows Apps
+name: Build macOS and Windows Apps v0.0
 
 on:
   push:
