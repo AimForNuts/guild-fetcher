@@ -26,9 +26,29 @@ jobs:
       run: |
         pyinstaller --onefile --clean import_members.py
 
-    - name: Sign macOS App
+    - name: Sign and notarize macOS App
       run: |
-        codesign --force --deep --sign - dist/import_members
+        # Create a self-signed certificate
+        openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=Self Signed"
+        
+        # Create a p12 certificate
+        openssl pkcs12 -export -out certificate.p12 -inkey key.pem -in cert.pem -password pass:password
+        
+        # Create a temporary keychain
+        security create-keychain -p password build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p password build.keychain
+        security set-keychain-settings -t 3600 -u build.keychain
+        
+        # Import certificate
+        security import certificate.p12 -k build.keychain -P password -T /usr/bin/codesign
+        
+        # Sign the app
+        codesign --force --deep --sign "Self Signed" dist/import_members
+        
+        # Clean up
+        security delete-keychain build.keychain
+        rm key.pem cert.pem certificate.p12
 
     - name: Upload macOS App artifact
       uses: actions/upload-artifact@v4
