@@ -5,6 +5,7 @@ import sys
 from openpyxl import load_workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font
+from datetime import datetime
 
 def create_empty_guild_df(guild_name):
     """Create an empty DataFrame for a guild that wasn't found."""
@@ -15,71 +16,71 @@ def create_empty_guild_df(guild_name):
         "Status": []
     })
 
-def find_guild_file(directory, guild_name):
-    """Find a file that starts with the guild name, regardless of extension."""
-    for file in os.listdir(directory):
+def find_guild_file(guild_name):
+    """Find the guild file regardless of extension."""
+    for file in os.listdir('.'):
         if file.startswith(guild_name):
-            return os.path.join(directory, file)
+            return file
     return None
 
-def process_guild_file(file_path, guild_name):
-    """Process a single guild file and return its DataFrame."""
+def process_guild_file(file_path):
+    """Process guild file and return guild data."""
     try:
-        print(f"Attempting to open file: {file_path}")
-        if not os.path.exists(file_path):
-            print(f"❌ File not found: {file_path}")
-            return create_empty_guild_df(guild_name)
-
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-
-        # Get current guild data
-        current_guild = data.get("guild", {})
-        guild_name = current_guild.get("name", guild_name)
-        print(f"Processing guild: {guild_name}")
-        
-        # Get current raid participants
-        raids = current_guild.get("scheduled_raids", [])
-        current_participants = set()
-        
-        for raid in raids:
-            if raid.get("status") == "IN_PROGRESS":
-                participants = raid.get("raid", {}).get("participants", [])
-                current_participants.update(p.get("name") for p in participants)
-                print(f"Found {len(participants)} participants in current raid")
-
-        # Process current guild
-        members = current_guild.get("members", [])
-        member_data = []
-        
-        for member in members:
-            # Extract badges which contain level information
-            badges = member.get("badges", [])
             
-            # Extract and convert levels to integers
-            total_level = next((int(badge.split("Total Lv. ")[1]) for badge in badges if "Total Lv." in badge), 0)
-            combat_level = next((int(badge.split("Combat Lv. ")[1]) for badge in badges if "Combat Lv." in badge), 0)
+        # Try extended format first
+        if isinstance(data, dict) and 'members' in data:
+            # Extended format
+            members_data = []
+            for member in data['members']:
+                member_info = {
+                    'Name': member.get('name', ''),
+                    'Total Level': member.get('total_level', 'N/A'),
+                    'Combat Level': member.get('combat_level', 'N/A'),
+                    'Status': 'OK'
+                }
+                members_data.append(member_info)
             
-            # Check if member is in current raid
-            status = "OK" if member.get("name") in current_participants else "X"
+            # Add missed members
+            for missed in data.get('missed', []):
+                members_data.append({
+                    'Name': missed,
+                    'Total Level': 'N/A',
+                    'Combat Level': 'N/A',
+                    'Status': 'X'
+                })
+                
+            return members_data
             
-            member_data.append({
-                "Name": member.get("name", "Unknown"),
-                "Total Level": total_level,
-                "Combat Level": combat_level,
-                "Status": status
-            })
-        
-        return pd.DataFrame(member_data)
-    except FileNotFoundError:
-        print(f"❌ Could not find file for {guild_name}")
-        return create_empty_guild_df(guild_name)
-    except json.JSONDecodeError:
-        print(f"❌ Error: {file_path} is not a valid JSON file")
-        return create_empty_guild_df(guild_name)
+        # Fall back to simplified format
+        elif isinstance(data, dict) and 'participants' in data:
+            # Simplified format
+            members_data = []
+            
+            # Add participants
+            for participant in data.get('participants', []):
+                members_data.append({
+                    'Name': participant,
+                    'Total Level': 'N/A',
+                    'Combat Level': 'N/A',
+                    'Status': 'OK'
+                })
+            
+            # Add missed members
+            for missed in data.get('missed', []):
+                members_data.append({
+                    'Name': missed,
+                    'Total Level': 'N/A',
+                    'Combat Level': 'N/A',
+                    'Status': 'X'
+                })
+                
+            return members_data
+            
     except Exception as e:
-        print(f"❌ Error processing {guild_name}: {str(e)}")
-        return create_empty_guild_df(guild_name)
+        print(f"Error processing {file_path}: {str(e)}")
+        return None
 
 def main():
     try:
@@ -91,35 +92,50 @@ def main():
             # If the application is run from a Python interpreter
             application_path = os.path.dirname(os.path.abspath(__file__))
         
+        # Change to the application directory
+        os.chdir(application_path)
         print(f"Working directory: {application_path}")
         
-        # List of guild names to process
-        guild_names = [
-            "Ironblood II",
-            "Ironblood III",
-            "Ironblood IV",
-            "Ironblood V"
-        ]
+        # Find all guild files
+        guild_files = [f for f in os.listdir('.') if f.endswith('.json') or f.endswith('.text')]
+        
+        if not guild_files:
+            print("No guild files found in the current directory.")
+            return
         
         # Dictionary to store DataFrames for each guild
         guild_dfs = {}
         
         # Process each guild file
-        for guild_name in guild_names:
-            file_path = find_guild_file(application_path, guild_name)
-            if file_path:
-                print(f"Found file for {guild_name}: {file_path}")
-                df = process_guild_file(file_path, guild_name)
+        for guild_file in guild_files:
+            print(f"\nProcessing {guild_file}...")
+            
+            # Process the file
+            members_data = process_guild_file(guild_file)
+            
+            if members_data:
+                # Create DataFrame
+                df = pd.DataFrame(members_data)
+                
+                # Sort by Status (OK first) and then by Name
+                df = df.sort_values(['Status', 'Name'])
+                
+                # Store in dictionary
+                guild_name = os.path.splitext(guild_file)[0]  # Remove extension
+                guild_dfs[guild_name] = df
+                print(f"Successfully processed {guild_file}")
             else:
-                print(f"No file found for {guild_name}")
-                df = create_empty_guild_df(guild_name)
-            guild_dfs[guild_name] = df
-            print(f"Processed {len(df)} members for {guild_name}")
-
-        # Export to Excel in the same directory as the executable
-        excel_file = os.path.join(application_path, "guild_data.xlsx")
+                print(f"Failed to process {guild_file}")
         
-        # Create Excel writer
+        if not guild_dfs:
+            print("No guilds were successfully processed.")
+            return
+        
+        # Generate output filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        excel_file = f'guild_members_{timestamp}.xlsx'
+        
+        # Export to Excel
         with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
             # Write each guild's DataFrame to a separate sheet
             for guild_name, df in guild_dfs.items():
@@ -129,24 +145,20 @@ def main():
                 ws = writer.sheets[guild_name]
                 
                 # Add dropdown to Status column
-                dv = DataValidation(type="list", formula1='"OK,X"', allow_blank=True)
-                last_row = max(2, ws.max_row)  # Ensure at least row 2 exists
-                dv.add(f"D2:D{last_row}")
-                ws.add_data_validation(dv)
+                status_validation = DataValidation(type="list", formula1='"OK,X"', allow_blank=True)
+                ws.add_data_validation(status_validation)
+                status_validation.add(f'D2:D{len(df) + 1}')
                 
-                # Set Verdana font and center alignment for all cells
-                verdana_font = Font(name='Verdana')
-                bold_italic_font = Font(name='Verdana', bold=True, italic=True)
+                # Format headers
+                for cell in ws[1]:
+                    cell.font = Font(bold=True)
+                    cell.alignment = Alignment(horizontal='center')
                 
-                for row in ws.iter_rows(min_row=1, max_row=last_row, min_col=1, max_col=4):
+                # Center align all cells
+                for row in ws.iter_rows(min_row=2):
                     for cell in row:
-                        # Apply bold and italic to Total Level and Combat Level columns
-                        if cell.column in [2, 3]:  # Columns B and C
-                            cell.font = bold_italic_font
-                        else:
-                            cell.font = verdana_font
                         cell.alignment = Alignment(horizontal='center')
-
+        
         print(f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}")
         print("Press Enter to exit...")
         input()
