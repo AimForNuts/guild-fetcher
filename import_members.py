@@ -15,6 +15,13 @@ def create_empty_guild_df(guild_name):
         "Status": []
     })
 
+def find_guild_file(directory, guild_name):
+    """Find a file that starts with the guild name, regardless of extension."""
+    for file in os.listdir(directory):
+        if file.startswith(guild_name):
+            return os.path.join(directory, file)
+    return None
+
 def process_guild_file(file_path, guild_name):
     """Process a single guild file and return its DataFrame."""
     try:
@@ -86,8 +93,8 @@ def main():
         
         print(f"Working directory: {application_path}")
         
-        # List of guild files to process
-        guild_files = [
+        # List of guild names to process
+        guild_names = [
             "Ironblood II",
             "Ironblood III",
             "Ironblood IV",
@@ -98,9 +105,14 @@ def main():
         guild_dfs = {}
         
         # Process each guild file
-        for guild_name in guild_files:
-            file_path = os.path.join(application_path, f"{guild_name}.text")
-            df = process_guild_file(file_path, guild_name)
+        for guild_name in guild_names:
+            file_path = find_guild_file(application_path, guild_name)
+            if file_path:
+                print(f"Found file for {guild_name}: {file_path}")
+                df = process_guild_file(file_path, guild_name)
+            else:
+                print(f"No file found for {guild_name}")
+                df = create_empty_guild_df(guild_name)
             guild_dfs[guild_name] = df
             print(f"Processed {len(df)} members for {guild_name}")
 
