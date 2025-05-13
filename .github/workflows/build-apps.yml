@@ -78,10 +78,9 @@ jobs:
         if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
         
         # Build with PyInstaller
-        pyinstaller --onefile --clean --noconsole --name "import_members" ^
-          --add-data "Ironblood V.text;." ^
-          --hidden-import=pandas ^
-          --hidden-import=openpyxl ^
+        pyinstaller --onefile --clean --noconsole --name "import_members" `
+          --hidden-import=pandas `
+          --hidden-import=openpyxl `
           import_members.py
 
     - name: Test Windows EXE
@@ -89,7 +88,9 @@ jobs:
         # Create a test directory
         New-Item -ItemType Directory -Force -Path "test_run"
         Copy-Item "dist\import_members.exe" -Destination "test_run\"
-        Copy-Item "Ironblood V.text" -Destination "test_run\"
+        
+        # Create a test file
+        Set-Content -Path "test_run\Ironblood V.txt" -Value "{}"
         
         # Run the exe and capture output
         Set-Location "test_run"
