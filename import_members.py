@@ -29,34 +29,44 @@ def process_guild_file(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        # Try extended format first
-        if isinstance(data, dict) and 'members' in data:
-            # Extended format
+        # Strategy 1: Try to get detailed information
+        if isinstance(data, dict) and 'guild' in data and isinstance(data['guild'], dict) and 'members' in data['guild']:
             members_data = []
-            for member in data['members']:
-                member_info = {
-                    'Name': member.get('name', ''),
-                    'Total Level': member.get('total_level', 'N/A'),
-                    'Combat Level': member.get('combat_level', 'N/A'),
-                    'Status': 'OK'
-                }
-                members_data.append(member_info)
             
-            # Add missed members
-            for missed in data.get('missed', []):
-                members_data.append({
-                    'Name': missed,
-                    'Total Level': 'N/A',
-                    'Combat Level': 'N/A',
-                    'Status': 'X'
-                })
+            # Get list of participants from the first scheduled raid
+            participants = set()
+            if 'scheduled_raids' in data['guild'] and data['guild']['scheduled_raids']:
+                first_raid = data['guild']['scheduled_raids'][0]
+                if 'raid' in first_raid and 'participants' in first_raid['raid']:
+                    participants = {p['name'] for p in first_raid['raid']['participants']}
+            
+            for member in data['guild']['members']:
+                # Extract combat level from badges
+                combat_level = 'N/A'
+                total_level = member.get('total_level', 'N/A')
                 
+                for badge in member.get('badges', []):
+                    if 'Combat Lv.' in badge:
+                        combat_level = badge.split('Combat Lv. ')[1]
+                        break
+                
+                # Set status based on whether member is in participants list
+                name = member.get('name', '')
+                status = 'OK' if name in participants else 'X'
+                
+                members_data.append({
+                    'Name': name,
+                    'Total Level': total_level,
+                    'Combat Level': combat_level,
+                    'Status': status
+                })
             return members_data
             
-        # Try new format (array of members with status)
-        elif isinstance(data, dict) and 'members' in data and isinstance(data['members'], list):
+        # Strategy 2: Fallback to simple format
+        elif isinstance(data, dict) and 'members' in data:
             members_data = []
             for member in data['members']:
+                # Convert status: 'participant' -> 'OK', 'missed' -> 'X'
                 status = 'OK' if member.get('status') == 'participant' else 'X'
                 members_data.append({
                     'Name': member.get('name', ''),
@@ -64,31 +74,6 @@ def process_guild_file(file_path):
                     'Combat Level': 'N/A',
                     'Status': status
                 })
-            return members_data
-            
-        # Fall back to simplified format
-        elif isinstance(data, dict) and 'participants' in data:
-            # Simplified format
-            members_data = []
-            
-            # Add participants
-            for participant in data.get('participants', []):
-                members_data.append({
-                    'Name': participant,
-                    'Total Level': 'N/A',
-                    'Combat Level': 'N/A',
-                    'Status': 'OK'
-                })
-            
-            # Add missed members
-            for missed in data.get('missed', []):
-                members_data.append({
-                    'Name': missed,
-                    'Total Level': 'N/A',
-                    'Combat Level': 'N/A',
-                    'Status': 'X'
-                })
-                
             return members_data
             
     except Exception as e:
@@ -129,9 +114,6 @@ def main():
             if members_data:
                 # Create DataFrame
                 df = pd.DataFrame(members_data)
-                
-                # Sort by Status (OK first) and then by Name
-                df = df.sort_values(['Status', 'Name'])
                 
                 # Store in dictionary
                 guild_name = os.path.splitext(guild_file)[0]  # Remove extension
