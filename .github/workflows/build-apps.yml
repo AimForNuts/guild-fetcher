@@ -24,7 +24,11 @@ jobs:
 
     - name: Build macOS App with PyInstaller
       run: |
-        pyinstaller --onefile import_members.py
+        pyinstaller --onefile --clean import_members.py
+
+    - name: Sign macOS App
+      run: |
+        codesign --force --deep --sign - dist/import_members
 
     - name: Upload macOS App artifact
       uses: actions/upload-artifact@v4
@@ -50,7 +54,7 @@ jobs:
 
     - name: Build Windows EXE with PyInstaller
       run: |
-        pyinstaller --onefile import_members.py
+        pyinstaller --onefile --clean --noconsole import_members.py
 
     - name: Upload Windows EXE artifact
       uses: actions/upload-artifact@v4
