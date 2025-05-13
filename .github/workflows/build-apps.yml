@@ -74,7 +74,28 @@ jobs:
 
     - name: Build Windows EXE with PyInstaller
       run: |
-        pyinstaller --onefile --clean --noconsole import_members.py
+        # Create a clean build directory
+        if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+        if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+        
+        # Build with PyInstaller
+        pyinstaller --onefile --clean --noconsole --name "import_members" ^
+          --add-data "Ironblood V.text;." ^
+          --hidden-import=pandas ^
+          --hidden-import=openpyxl ^
+          import_members.py
+
+    - name: Test Windows EXE
+      run: |
+        # Create a test directory
+        New-Item -ItemType Directory -Force -Path "test_run"
+        Copy-Item "dist\import_members.exe" -Destination "test_run\"
+        Copy-Item "Ironblood V.text" -Destination "test_run\"
+        
+        # Run the exe and capture output
+        Set-Location "test_run"
+        $output = & ".\import_members.exe" 2>&1
+        Write-Output $output
 
     - name: Upload Windows EXE artifact
       uses: actions/upload-artifact@v4
