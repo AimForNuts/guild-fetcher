@@ -26,7 +26,7 @@ jobs:
       run: |
         pyinstaller --onefile --clean import_members.py
 
-    - name: Sign and notarize macOS App
+    - name: Sign macOS App
       run: |
         # Create a self-signed certificate
         openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=Self Signed"
@@ -47,7 +47,6 @@ jobs:
         codesign --force --deep --sign "Self Signed" dist/import_members
         
         # Clean up
-        security delete-keychain build.keychain
         rm key.pem cert.pem certificate.p12
 
     - name: Upload macOS App artifact
