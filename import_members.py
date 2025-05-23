@@ -118,6 +118,7 @@ def main():
         # Change to the application directory
         os.chdir(application_path)
         print(f"Working directory: {application_path}")
+        print(f"Current directory contents: {os.listdir('.')}")
         
         # Dictionary to store DataFrames for each guild
         guild_dfs = {}
@@ -130,6 +131,7 @@ def main():
             
             # Find all matching files for this guild
             guild_files = find_guild_file(base_guild)
+            print(f"Found files for {base_guild}: {guild_files}")
             
             if not guild_files:
                 print(f"No files found for {base_guild}")
@@ -145,6 +147,8 @@ def main():
                 members_data = process_guild_file(guild_file)
                 
                 if members_data:
+                    print(f"Successfully extracted data from {guild_file}")
+                    print(f"Number of members found: {len(members_data)}")
                     # Create DataFrame
                     df = pd.DataFrame(members_data)
                     
@@ -155,6 +159,10 @@ def main():
                 else:
                     print(f"Failed to process {guild_file}")
         
+        print(f"\nTotal guilds processed: {len(guild_dfs)}")
+        for guild, df in guild_dfs.items():
+            print(f"{guild}: {len(df)} members")
+        
         if not guild_dfs:
             error_msg = "No guilds were successfully processed."
             print(f"❌ {error_msg}")
@@ -164,36 +172,48 @@ def main():
         # Generate output filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_file = f'guild_members_{timestamp}.xlsx'
+        print(f"\nAttempting to create Excel file: {excel_file}")
         
-        # Export to Excel
-        with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-            # Write each guild's DataFrame to a separate sheet
-            for guild_name, df in guild_dfs.items():
-                # Ensure sheet name is valid (max 31 chars, no special chars)
-                sheet_name = guild_name[:31].replace('/', '_').replace('\\', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_')
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-                
-                # Get the worksheet
-                ws = writer.sheets[sheet_name]
-                
-                # Add dropdown to Status column
-                status_validation = DataValidation(type="list", formula1='"OK,X"', allow_blank=True)
-                ws.add_data_validation(status_validation)
-                status_validation.add(f'D2:D{len(df) + 1}')
-                
-                # Format headers
-                for cell in ws[1]:
-                    cell.font = Font(bold=True)
-                    cell.alignment = Alignment(horizontal='center')
-                
-                # Center align all cells
-                for row in ws.iter_rows(min_row=2):
-                    for cell in row:
+        try:
+            # Export to Excel
+            with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+                # Write each guild's DataFrame to a separate sheet
+                for guild_name, df in guild_dfs.items():
+                    print(f"Writing sheet for {guild_name}")
+                    # Ensure sheet name is valid (max 31 chars, no special chars)
+                    sheet_name = guild_name[:31].replace('/', '_').replace('\\', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_')
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+                    
+                    # Get the worksheet
+                    ws = writer.sheets[sheet_name]
+                    
+                    # Add dropdown to Status column only if there are rows
+                    if len(df) > 0:
+                        status_validation = DataValidation(type="list", formula1='"OK,X"', allow_blank=True)
+                        ws.add_data_validation(status_validation)
+                        # Ensure we have at least 2 rows (header + 1 data row)
+                        end_row = max(2, len(df) + 1)
+                        status_validation.add(f'D2:D{end_row}')
+                    
+                    # Format headers
+                    for cell in ws[1]:
+                        cell.font = Font(bold=True)
                         cell.alignment = Alignment(horizontal='center')
-        
-        success_msg = f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}"
-        print(success_msg)
-        show_popup("Success", success_msg)
+                    
+                    # Center align all cells
+                    for row in ws.iter_rows(min_row=2):
+                        for cell in row:
+                            cell.alignment = Alignment(horizontal='center')
+            
+            print(f"Excel file created successfully at: {os.path.abspath(excel_file)}")
+            success_msg = f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}"
+            print(success_msg)
+            show_popup("Success", success_msg)
+            
+        except Exception as excel_error:
+            error_msg = f"❌ Error creating Excel file: {str(excel_error)}"
+            print(error_msg)
+            show_popup("Error", error_msg)
         
     except Exception as e:
         error_msg = f"❌ An unexpected error occurred: {str(e)}"
