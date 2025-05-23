@@ -2,6 +2,7 @@ import json
 import pandas as pd
 import os
 import sys
+import subprocess
 from openpyxl import load_workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font
@@ -15,6 +16,18 @@ def show_popup(title, message):
     root.withdraw()  # Hide the main window
     messagebox.showinfo(title, message)
     root.destroy()
+
+def open_file_location(file_path):
+    """Open the file's directory in the system's file explorer."""
+    try:
+        if sys.platform == 'win32':
+            os.startfile(os.path.dirname(file_path))
+        elif sys.platform == 'darwin':  # macOS
+            subprocess.run(['open', os.path.dirname(file_path)])
+        else:  # Linux
+            subprocess.run(['xdg-open', os.path.dirname(file_path)])
+    except Exception as e:
+        print(f"Could not open file location: {str(e)}")
 
 def create_empty_guild_df(guild_name):
     """Create an empty DataFrame for a guild that wasn't found."""
@@ -172,11 +185,12 @@ def main():
         # Generate output filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_file = f'guild_members_{timestamp}.xlsx'
-        print(f"\nAttempting to create Excel file: {excel_file}")
+        excel_path = os.path.abspath(excel_file)
+        print(f"\nAttempting to create Excel file at: {excel_path}")
         
         try:
             # Export to Excel
-            with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
                 # Write each guild's DataFrame to a separate sheet
                 for guild_name, df in guild_dfs.items():
                     print(f"Writing sheet for {guild_name}")
@@ -205,10 +219,13 @@ def main():
                         for cell in row:
                             cell.alignment = Alignment(horizontal='center')
             
-            print(f"Excel file created successfully at: {os.path.abspath(excel_file)}")
-            success_msg = f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}"
+            print(f"Excel file created successfully at: {excel_path}")
+            success_msg = f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}\n\nFile location: {excel_path}"
             print(success_msg)
             show_popup("Success", success_msg)
+            
+            # Open the file's directory
+            open_file_location(excel_path)
             
         except Exception as excel_error:
             error_msg = f"❌ Error creating Excel file: {str(excel_error)}"
