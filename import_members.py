@@ -6,6 +6,15 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font
 from datetime import datetime
+import tkinter as tk
+from tkinter import messagebox
+
+def show_popup(title, message):
+    """Show a popup message."""
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    messagebox.showinfo(title, message)
+    root.destroy()
 
 def create_empty_guild_df(guild_name):
     """Create an empty DataFrame for a guild that wasn't found."""
@@ -17,17 +26,33 @@ def create_empty_guild_df(guild_name):
     })
 
 def find_guild_file(guild_name):
-    """Find the guild file regardless of extension."""
+    """Find all guild files that match the base name."""
+    matching_files = []
     for file in os.listdir('.'):
-        if file.startswith(guild_name):
-            return file
-    return None
+        if file.lower().startswith(guild_name.lower()):
+            matching_files.append(file)
+    return matching_files
 
 def process_guild_file(file_path):
     """Process guild file and return guild data."""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        # Try different encodings
+        encodings = ['utf-8', 'utf-8-sig', 'latin1']
+        data = None
+        
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    data = json.load(f)
+                break
+            except UnicodeDecodeError:
+                continue
+            except json.JSONDecodeError:
+                continue
+        
+        if data is None:
+            print(f"Could not read file {file_path} with any supported encoding")
+            return None
             
         # Strategy 1: Try to get detailed information
         if isinstance(data, dict) and 'guild' in data and isinstance(data['guild'], dict) and 'members' in data['guild']:
@@ -94,36 +119,46 @@ def main():
         os.chdir(application_path)
         print(f"Working directory: {application_path}")
         
-        # Find all guild files
-        guild_files = [f for f in os.listdir('.') if f.endswith('.json') or f.endswith('.text')]
-        
-        if not guild_files:
-            print("No guild files found in the current directory.")
-            return
-        
         # Dictionary to store DataFrames for each guild
         guild_dfs = {}
         
-        # Process each guild file
-        for guild_file in guild_files:
-            print(f"\nProcessing {guild_file}...")
+        # Process Ironblood guilds
+        base_guilds = ['Ironblood', 'Ironblood II', 'Ironblood III', 'Ironblood IV', 'Ironblood V']
+        
+        for base_guild in base_guilds:
+            print(f"\nProcessing {base_guild}...")
             
-            # Process the file
-            members_data = process_guild_file(guild_file)
+            # Find all matching files for this guild
+            guild_files = find_guild_file(base_guild)
             
-            if members_data:
-                # Create DataFrame
-                df = pd.DataFrame(members_data)
+            if not guild_files:
+                print(f"No files found for {base_guild}")
+                # Create empty DataFrame for guilds without files
+                guild_dfs[base_guild] = create_empty_guild_df(base_guild)
+                continue
+            
+            # Process each matching file
+            for guild_file in guild_files:
+                print(f"Processing file: {guild_file}")
                 
-                # Store in dictionary
-                guild_name = os.path.splitext(guild_file)[0]  # Remove extension
-                guild_dfs[guild_name] = df
-                print(f"Successfully processed {guild_file}")
-            else:
-                print(f"Failed to process {guild_file}")
+                # Process the file
+                members_data = process_guild_file(guild_file)
+                
+                if members_data:
+                    # Create DataFrame
+                    df = pd.DataFrame(members_data)
+                    
+                    # Store in dictionary using the base guild name
+                    guild_dfs[base_guild] = df
+                    print(f"Successfully processed {guild_file}")
+                    break  # Use the first valid file for each guild
+                else:
+                    print(f"Failed to process {guild_file}")
         
         if not guild_dfs:
-            print("No guilds were successfully processed.")
+            error_msg = "No guilds were successfully processed."
+            print(f"❌ {error_msg}")
+            show_popup("Error", error_msg)
             return
         
         # Generate output filename with timestamp
@@ -134,10 +169,12 @@ def main():
         with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
             # Write each guild's DataFrame to a separate sheet
             for guild_name, df in guild_dfs.items():
-                df.to_excel(writer, sheet_name=guild_name, index=False)
+                # Ensure sheet name is valid (max 31 chars, no special chars)
+                sheet_name = guild_name[:31].replace('/', '_').replace('\\', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_')
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
                 
                 # Get the worksheet
-                ws = writer.sheets[guild_name]
+                ws = writer.sheets[sheet_name]
                 
                 # Add dropdown to Status column
                 status_validation = DataValidation(type="list", formula1='"OK,X"', allow_blank=True)
@@ -154,14 +191,14 @@ def main():
                     for cell in row:
                         cell.alignment = Alignment(horizontal='center')
         
-        print(f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}")
-        print("Press Enter to exit...")
-        input()
+        success_msg = f"✅ Excel file created with {len(guild_dfs)} guild tabs: {excel_file}"
+        print(success_msg)
+        show_popup("Success", success_msg)
         
     except Exception as e:
-        print(f"❌ An unexpected error occurred: {str(e)}")
-        print("Press Enter to exit...")
-        input()
+        error_msg = f"❌ An unexpected error occurred: {str(e)}"
+        print(error_msg)
+        show_popup("Error", error_msg)
 
 if __name__ == "__main__":
     main()
